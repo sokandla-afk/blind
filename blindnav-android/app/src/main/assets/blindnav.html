@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>BlindNav — 시각장애인 위치 안내</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
+:root {
+  --bg: #0a0a12;
+  --surface: #13131f;
+  --surface2: #1a1a2e;
+  --border: #2a2a44;
+  --purple: #6366f1;
+  --purple-light: #818cf8;
+  --green: #22c55e;
+  --red: #ef4444;
+  --amber: #f59e0b;
+  --text: #e8e8f0;
+  --text2: #8888aa;
+  --text3: #4a4a6a;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans KR', sans-serif;
+  overflow: hidden;
+  user-select: none;
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* ── 헤더 ── */
+#header {
+  padding: 14px 18px 10px;
+  border-bottom: 0.5px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  background: var(--surface);
+}
+.app-title { font-size: 15px; font-weight: 700; letter-spacing: .04em; color: #fff; }
+.gps-status { display: flex; align-items: center; gap: 5px; font-size: 11px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot-green { background: var(--green); }
+.dot-amber { background: var(--amber); }
+.dot-red { background: var(--red); }
+
+/* ── 주소 카드 ── */
+#addr-card {
+  margin: 12px 14px 0;
+  background: var(--surface2);
+  border: 0.5px solid var(--border);
+  border-radius: 16px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color .2s;
+  flex-shrink: 0;
+}
+#addr-card:active { border-color: var(--purple); }
+.addr-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; }
+#addr-main { font-size: 17px; font-weight: 700; color: #fff; line-height: 1.4; }
+#addr-sub { font-size: 12px; color: var(--text2); margin-top: 3px; }
+.tap-hint { font-size: 10px; color: var(--text3); margin-top: 6px; }
+
+/* ── 나침반 ── */
+#compass-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 0 10px;
+  flex-shrink: 0;
+}
+#compass-ring {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cdir {
+  position: absolute;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+.cdir-n { top: 7px; left: 50%; transform: translateX(-50%); color: var(--purple-light); }
+.cdir-s { bottom: 7px; left: 50%; transform: translateX(-50%); color: var(--text3); }
+.cdir-e { right: 9px; top: 50%; transform: translateY(-50%); color: var(--text3); }
+.cdir-w { left: 9px; top: 50%; transform: translateY(-50%); color: var(--text3); }
+#needle {
+  width: 2px;
+  height: 42px;
+  background: linear-gradient(to bottom, var(--purple-light) 50%, var(--red) 50%);
+  border-radius: 2px;
+  position: absolute;
+  top: 23px;
+  left: calc(50% - 1px);
+  transform-origin: bottom center;
+  transition: transform .4s cubic-bezier(.25,.46,.45,.94);
+}
+#compass-center {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #fff; position: absolute; z-index: 2;
+}
+#heading-text { font-size: 11px; color: var(--text2); margin-top: 6px; }
+
+/* ── 탭 ── */
+#tabs {
+  display: flex;
+  gap: 0;
+  margin: 0 14px;
+  border-bottom: 0.5px solid var(--border);
+  flex-shrink: 0;
+}
+.tab-btn {
+  flex: 1;
+  padding: 8px 0;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .15s;
+}
+.tab-btn.active { color: var(--purple-light); border-bottom-color: var(--purple-light); }
+
+/* ── POI 목록 ── */
+#poi-wrap {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+  -webkit-overflow-scrolling: touch;
+}
+.poi-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  background: var(--surface2);
+  border: 0.5px solid var(--border);
+  border-radius: 14px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all .12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.poi-item:active, .poi-item.speaking { background: #22223a; border-color: var(--purple); }
+.poi-item.cross-item { border-color: rgba(34,197,94,.2); }
+.poi-item.cross-item.speaking { border-color: var(--green); }
+.poi-icon {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px;
+  flex-shrink: 0;
+}
+.poi-info { flex: 1; min-width: 0; }
+.poi-name {
+  font-size: 13px; font-weight: 500; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.poi-detail { font-size: 11px; color: var(--text2); margin-top: 2px; }
+.poi-dist { font-size: 12px; font-weight: 700; flex-shrink: 0; }
+
+/* ── TTS 바 ── */
+#tts-bar {
+  background: var(--surface);
+  border-top: 0.5px solid var(--border);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  flex-shrink: 0;
+}
+#speaker-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--purple);
+  border: none;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .2s;
+}
+#speaker-btn.speaking { background: var(--purple-light); }
+#tts-text { font-size: 12px; color: var(--text2); font-style: italic; line-height: 1.5; flex: 1; }
+#tts-text.silent { font-style: normal; color: var(--text3); }
+
+/* ── 하단 버튼 ── */
+#bottom-btns {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px 16px;
+  background: var(--surface);
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
+  flex-shrink: 0;
+}
+.btn {
+  flex: 1;
+  padding: 13px 6px;
+  border-radius: 14px;
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity .1s, transform .1s;
+  letter-spacing: .01em;
+}
+.btn:active { opacity: .7; transform: scale(.97); }
+.btn-addr { background: var(--purple); color: #fff; }
+.btn-poi { background: var(--surface2); color: var(--purple-light); border: 0.5px solid var(--border); }
+.btn-cross { background: rgba(34,197,94,.08); color: #86efac; border: 0.5px solid rgba(34,197,94,.3); }
+
+/* ── 권한 오버레이 ── */
+#overlay {
+  position: absolute; inset: 0;
+  background: rgba(10,10,18,.97);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px;
+  z-index: 100;
+  padding: 32px;
+  text-align: center;
+}
+#overlay.hidden { display: none; }
+.overlay-icon { font-size: 44px; }
+.overlay-title { font-size: 20px; font-weight: 700; color: #fff; }
+.overlay-desc { font-size: 13px; color: var(--text2); line-height: 1.7; max-width: 280px; }
+.overlay-btn {
+  background: var(--purple); color: #fff;
+  border: none; border-radius: 14px;
+  padding: 14px 32px;
+  font-size: 14px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+  transition: opacity .15s;
+  margin-top: 4px;
+}
+.overlay-btn:active { opacity: .8; }
+.overlay-btn-sec {
+  background: transparent; color: var(--text2);
+  border: 0.5px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 24px;
+  font-size: 13px; font-weight: 500;
+  cursor: pointer; font-family: inherit;
+}
+
+/* ── 권한 거부 오버레이 ── */
+#perm-denied-overlay {
+  position: absolute; inset: 0;
+  background: rgba(10,10,18,.97);
+  display: none; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 14px;
+  z-index: 200;
+  padding: 32px;
+  text-align: center;
+}
+#perm-denied-overlay.visible { display: flex; }
+.denied-icon { font-size: 48px; }
+.denied-title { font-size: 18px; font-weight: 700; color: var(--red); }
+.denied-desc { font-size: 13px; color: var(--text2); line-height: 1.75; max-width: 300px; }
+.denied-steps {
+  background: var(--surface2);
+  border: 0.5px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 18px;
+  text-align: left;
+  max-width: 300px;
+  width: 100%;
+}
+.denied-steps-title { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+.step-item { font-size: 12px; color: var(--text); line-height: 1.7; display: flex; gap: 8px; }
+.step-num { color: var(--purple-light); font-weight: 700; flex-shrink: 0; }
+.denied-btn {
+  background: var(--purple); color: #fff;
+  border: none; border-radius: 14px;
+  padding: 13px 28px;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+  width: 100%; max-width: 300px;
+}
+.denied-btn-sec {
+  background: transparent; color: var(--text2);
+  border: 0.5px solid var(--border);
+  border-radius: 14px;
+  padding: 11px 24px;
+  font-size: 12px; font-weight: 500;
+  cursor: pointer; font-family: inherit;
+  width: 100%; max-width: 300px;
+}
+
+/* ── 웨이브 ── */
+@keyframes wave { 0%,100%{transform:scaleY(1)} 50%{transform:scaleY(1.8)} }
+.wave-bars { display:flex; align-items:center; gap:2px; }
+.wb { width:3px; height:13px; border-radius:2px; background:#fff; animation:wave .5s ease-in-out infinite; }
+.wb:nth-child(2){animation-delay:.12s} .wb:nth-child(3){animation-delay:.24s}
+
+/* ── 스피너 ── */
+@keyframes spin { to{transform:rotate(360deg)} }
+.spinner { width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--purple);border-radius:50%;animation:spin .8s linear infinite; }
+
+/* ── 빈 상태 ── */
+.empty-state { text-align:center; padding:32px 0; color:var(--text3); font-size:13px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- 헤더 -->
+  <div id="header">
+    <div class="app-title">BlindNav</div>
+    <div class="gps-status">
+      <div class="dot dot-amber" id="gps-dot"></div>
+      <span id="gps-label" style="color:var(--amber)">위치 파악 중...</span>
+    </div>
+  </div>
+
+  <!-- 주소 카드 -->
+  <div id="addr-card" onclick="speakAddress()" role="button" aria-label="현재 위치 주소 읽기">
+    <div class="addr-label">현재 위치</div>
+    <div id="addr-main">위치 정보를 불러오는 중...</div>
+    <div id="addr-sub" style="margin-top:4px"></div>
+    <div class="tap-hint">탭하면 주소를 읽어드립니다</div>
+  </div>
+
+  <!-- 나침반 -->
+  <div id="compass-wrap">
+    <div id="compass-ring">
+      <div class="cdir cdir-n">N</div>
+      <div class="cdir cdir-s">S</div>
+      <div class="cdir cdir-e">E</div>
+      <div class="cdir cdir-w">W</div>
+      <div id="needle"></div>
+      <div id="compass-center"></div>
+    </div>
+    <div id="heading-text">방향 센서 대기 중...</div>
+  </div>
+
+  <!-- 탭 -->
+  <div id="tabs">
+    <button class="tab-btn active" onclick="filterPoi('all',this)">전체</button>
+    <button class="tab-btn" onclick="filterPoi('food',this)">음식·카페</button>
+    <button class="tab-btn" onclick="filterPoi('landmark',this)">랜드마크</button>
+    <button class="tab-btn" onclick="filterPoi('cross',this)">횡단보도</button>
+  </div>
+
+  <!-- POI 목록 -->
+  <div id="poi-wrap">
+    <div class="empty-state">
+      <div class="spinner" style="margin:0 auto 10px"></div>
+      위치를 파악하면 주변 장소를 표시합니다
+    </div>
+  </div>
+
+  <!-- TTS 바 -->
+  <div id="tts-bar">
+    <button id="speaker-btn" onclick="stopSpeech()" aria-label="음성 중지">
+      <div class="wave-bars" id="wave-bars" style="display:none">
+        <div class="wb"></div><div class="wb"></div><div class="wb"></div>
+      </div>
+      <svg id="speaker-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+      </svg>
+    </button>
+    <div id="tts-text" class="silent">장소를 탭하면 음성으로 안내합니다</div>
+  </div>
+
+  <!-- 하단 버튼 -->
+  <div id="bottom-btns">
+    <button class="btn btn-addr" onclick="speakAddress()">현위치 읽기</button>
+    <button class="btn btn-poi" onclick="speakAllPoi()">주변 안내</button>
+    <button class="btn btn-cross" onclick="speakNearestCross()">횡단보도</button>
+  </div>
+
+  <!-- 시작 오버레이 -->
+  <div id="overlay">
+    <div class="overlay-icon">🔊</div>
+    <div class="overlay-title">BlindNav</div>
+    <div class="overlay-desc">
+      실제 GPS와 나침반을 사용하여<br>
+      현재 위치와 주변 장소를<br>
+      음성으로 안내합니다.<br><br>
+      <strong style="color:#fff">위치 권한</strong>과 <strong style="color:#fff">음성</strong>을 허용해 주세요.
+    </div>
+    <button class="overlay-btn" onclick="startApp()">시작하기</button>
+    <button class="overlay-btn-sec" onclick="startDemo()">데모 모드로 보기</button>
+  </div>
+
+  <!-- 위치 권한 거부 안내 오버레이 -->
+  <div id="perm-denied-overlay">
+    <div class="denied-icon">📍</div>
+    <div class="denied-title">위치 권한이 필요합니다</div>
+    <div class="denied-desc" id="denied-desc">
+      BlindNav는 현재 위치를 파악하기 위해<br>위치 접근 권한이 필요합니다.
+    </div>
+    <div class="denied-steps" id="denied-steps">
+      <div class="denied-steps-title" id="denied-steps-title">권한 허용 방법</div>
+      <div id="denied-steps-content"></div>
+    </div>
+    <button class="denied-btn" id="denied-retry-btn" onclick="retryLocation()">다시 시도</button>
+    <button class="denied-btn-sec" onclick="startDemo()">데모 모드로 계속하기</button>
+  </div>
+
+</div>
+
+<script>
+/* ────────────────────────────────────
+   상태
+──────────────────────────────────── */
+let userLat = 37.4979, userLon = 127.0276;
+let userHeading = 0;
+let currentFilter = 'all';
+let audioReady = false;
+let demoMode = false;
+let watchId = null;
+let pois = [];
+let lastAddr = '';
+let locationRetryCount = 0;
+const MAX_RETRY = 2;
+
+/* ────────────────────────────────────
+   플랫폼 감지
+──────────────────────────────────── */
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+function isAndroid() {
+  return /Android/.test(navigator.userAgent);
+}
+function isHTTPS() {
+  // Android 네이티브 앱(WebView)에서는 file:// 프로토콜이지만 위치 권한은 네이티브로 처리
+  if (isAndroidApp()) return true;
+  return location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+}
+function isAndroidApp() {
+  return typeof window.AndroidBridge !== 'undefined';
+}
+
+/* ────────────────────────────────────
+   시작
+──────────────────────────────────── */
+function startApp() {
+  unlockTTS();
+  document.getElementById('overlay').classList.add('hidden');
+
+  // Android 네이티브 앱이면 바로 위치 요청 (네이티브가 권한 처리)
+  if (isAndroidApp()) {
+    requestLocation();
+    requestCompass();
+    return;
+  }
+
+  // HTTPS 체크: HTTP 환경에서는 모바일 위치권한 불가
+  if (!isHTTPS() && (isIOS() || isAndroid())) {
+    showPermDenied('http');
+    return;
+  }
+
+  // Permissions API로 사전 권한 상태 확인 (지원 시)
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: 'geolocation' }).then(result => {
+      if (result.state === 'denied') {
+        showPermDenied('denied');
+      } else {
+        requestLocation();
+      }
+      result.onchange = () => {
+        if (result.state === 'granted') {
+          hidePermDenied();
+          requestLocation();
+        }
+      };
+    }).catch(() => {
+      requestLocation();
+    });
+  } else {
+    requestLocation();
+  }
+
+  requestCompass();
+}
+
+function startDemo() {
+  demoMode = true;
+  unlockTTS();
+  document.getElementById('overlay').classList.add('hidden');
+  hidePermDenied();
+  setGPSStatus('demo');
+  loadDemoPois();
+  simulateCompass();
+  updateDemoAddress();
+  setTimeout(() => speak('데모 모드입니다. 장소를 탭하면 음성으로 안내합니다.', 3000), 600);
+}
+
+/* ────────────────────────────────────
+   권한 거부 오버레이
+──────────────────────────────────── */
+function showPermDenied(reason) {
+  const overlay = document.getElementById('perm-denied-overlay');
+  const desc = document.getElementById('denied-desc');
+  const stepsTitle = document.getElementById('denied-steps-title');
+  const stepsContent = document.getElementById('denied-steps-content');
+  const retryBtn = document.getElementById('denied-retry-btn');
+
+  if (reason === 'http') {
+    desc.innerHTML = 'HTTPS 환경에서만 위치 권한을 사용할 수 있습니다.<br>아래 방법으로 접속하거나 데모 모드를 이용하세요.';
+    stepsTitle.textContent = '해결 방법';
+    stepsContent.innerHTML = `
+      <div class="step-item"><span class="step-num">1</span><span>주소창에서 <strong style="color:#fff">https://</strong>로 시작하는 URL로 접속하세요</span></div>
+      <div class="step-item" style="margin-top:6px"><span class="step-num">2</span><span>로컬 파일(file://)은 HTTPS 서버로 호스팅하여 열어주세요</span></div>
+    `;
+    retryBtn.style.display = 'none';
+  } else if (reason === 'denied') {
+    desc.innerHTML = 'BlindNav는 현재 위치를 파악하기 위해<br>위치 접근 권한이 필요합니다.';
+    stepsTitle.textContent = isIOS() ? 'Safari에서 권한 허용 방법' : isAndroid() ? 'Chrome에서 권한 허용 방법' : '권한 허용 방법';
+    retryBtn.style.display = '';
+
+    if (isIOS()) {
+      stepsContent.innerHTML = `
+        <div class="step-item"><span class="step-num">1</span><span>iPhone <strong style="color:#fff">설정</strong> 앱 열기</span></div>
+        <div class="step-item" style="margin-top:6px"><span class="step-num">2</span><span><strong style="color:#fff">개인 정보 보호 및 보안 → 위치 서비스</strong> 선택</span></div>
+        <div class="step-item" style="margin-top:6px"><span class="step-num">3</span><span><strong style="color:#fff">Safari</strong> 선택 후 위치 접근 <strong style="color:#fff">허용</strong>으로 변경</span></div>
+        <div class="step-item" style="margin-top:6px"><span class="step-num">4</span><span>이 페이지로 돌아와 <strong style="color:#fff">새로 고침</strong></span></div>
+      `;
+    } else if (isAndroid()) {
+      stepsContent.innerHTML = `
+        <div class="step-item"><span class="step-num">1</span><span>주소창 왼쪽 <strong style="color:#fff">🔒 자물쇠 아이콘</strong> 탭</span></div>
+        <div class="step-item" style="margin-top:6px"><span class="step-num">2</span><span><strong style="color:#fff">권한</strong> 또는 <strong style="color:#fff">사이트 설정</strong> 선택</span></div>
+        <div class="step-item" style="margin-top:6px"><span class="step-num">3</span><span><strong style="color:#fff">위치</strong>를 <strong style="color:#fff">허용</strong>으로 변경</span></div>
+        <div class="step-item" style="margin-top:6px"><span class="step-num">4</span><span>페이지 <strong style="color:#fff">새로 고침</strong> 후 다시 시도</span></div>
+      `;
+    } else {
+      stepsContent.innerHTML = `
+        <div class="step-item"><span class="step-num">1</span><span>브라우저 주소창의 <strong style="color:#fff">🔒 자물쇠</strong> 클릭</span></div>
+        <div class="step-item" style="margin-top:6px"><span class="step-num">2</span><span><strong style="color:#fff">위치</strong> 권한을 <strong style="color:#fff">허용</strong>으로 변경</span></div>
+        <div class="step-item" style="margin-top:6px"><span class="step-num">3</span><span>페이지를 <strong style="color:#fff">새로 고침</strong>하고 다시 시작</span></div>
+      `;
+    }
+  } else if (reason === 'timeout') {
+    desc.innerHTML = 'GPS 신호를 찾지 못했습니다.<br>실외로 이동 후 다시 시도해 주세요.';
+    stepsTitle.textContent = '확인 사항';
+    stepsContent.innerHTML = `
+      <div class="step-item"><span class="step-num">•</span><span>실내보다 <strong style="color:#fff">실외</strong>에서 신호가 더 잘 잡힙니다</span></div>
+      <div class="step-item" style="margin-top:6px"><span class="step-num">•</span><span>기기 설정에서 <strong style="color:#fff">위치 서비스</strong>가 켜져 있는지 확인하세요</span></div>
+      <div class="step-item" style="margin-top:6px"><span class="step-num">•</span><span>Wi-Fi를 켜두면 위치 정확도가 향상됩니다</span></div>
+    `;
+    retryBtn.style.display = '';
+  } else {
+    desc.innerHTML = '위치 정보를 가져오는 데 문제가 발생했습니다.';
+    stepsTitle.textContent = '오류 코드';
+    stepsContent.innerHTML = `<div class="step-item"><span class="step-num">•</span><span style="color:var(--red)">${reason}</span></div>`;
+    retryBtn.style.display = '';
+  }
+
+  overlay.classList.add('visible');
+  setGPSStatus('error');
+}
+
+function hidePermDenied() {
+  document.getElementById('perm-denied-overlay').classList.remove('visible');
+}
+
+function retryLocation() {
+  hidePermDenied();
+  locationRetryCount++;
+  requestLocation();
+}
+
+/* ────────────────────────────────────
+   TTS
+──────────────────────────────────── */
+function unlockTTS() {
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance('');
+  u.volume = 0;
+  window.speechSynthesis.speak(u);
+  window.speechSynthesis.getVoices();
+  audioReady = true;
+}
+
+function getKoVoice() {
+  const voices = window.speechSynthesis.getVoices();
+  return voices.find(v => v.lang === 'ko-KR')
+    || voices.find(v => v.lang.startsWith('ko'))
+    || null;
+}
+
+function speak(text, duration) {
+  if (!audioReady || !('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ko-KR';
+  u.rate = 0.9;
+  u.pitch = 1.0;
+  const v = getKoVoice();
+  if (v) u.voice = v;
+  u.onend = u.onerror = () => resetTTS();
+  window.speechSynthesis.speak(u);
+  showTTSActive(text);
+  clearTimeout(window._ttsT);
+  window._ttsT = setTimeout(resetTTS, (duration || 3500) + 800);
+}
+
+function showTTSActive(text) {
+  document.getElementById('tts-text').textContent = '\u201C' + text + '\u201D';
+  document.getElementById('tts-text').classList.remove('silent');
+  document.getElementById('speaker-btn').classList.add('speaking');
+  document.getElementById('wave-bars').style.display = 'flex';
+  document.getElementById('speaker-svg').style.display = 'none';
+}
+
+function resetTTS() {
+  document.getElementById('tts-text').textContent = '장소를 탭하면 음성으로 안내합니다';
+  document.getElementById('tts-text').classList.add('silent');
+  document.getElementById('speaker-btn').classList.remove('speaking');
+  document.getElementById('wave-bars').style.display = 'none';
+  document.getElementById('speaker-svg').style.display = 'block';
+  document.querySelectorAll('.poi-item').forEach(el => el.classList.remove('speaking'));
+}
+
+function stopSpeech() {
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  clearTimeout(window._ttsT);
+  resetTTS();
+}
+
+/* ────────────────────────────────────
+   위치 권한 & GPS  [핵심 수정 영역]
+──────────────────────────────────── */
+function requestLocation() {
+  if (!navigator.geolocation) {
+    document.getElementById('addr-main').textContent = '이 기기는 GPS를 지원하지 않습니다';
+    setGPSStatus('error');
+    loadDemoPois();
+    return;
+  }
+
+  setGPSStatus('searching');
+
+  const options = {
+    enableHighAccuracy: true,
+    timeout: 20000,          // 20초 (모바일 GPS 초기화 시간 고려)
+    maximumAge: 0
+  };
+
+  // watchPosition만 사용 (getCurrentPosition 중복 제거 → 일부 기기에서 충돌)
+  // 단, 첫 응답을 빠르게 받기 위해 getCurrentPosition도 병렬 실행
+  let gotFirstFix = false;
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      gotFirstFix = true;
+      onPosition(pos);
+    },
+    err => {
+      if (!gotFirstFix) onPositionError(err);
+    },
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+  );
+
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId);
+  }
+  watchId = navigator.geolocation.watchPosition(
+    pos => {
+      gotFirstFix = true;
+      onPosition(pos);
+    },
+    onPositionError,
+    { enableHighAccuracy: true, timeout: 30000, maximumAge: 5000 }
+  );
+}
+
+function onPosition(pos) {
+  userLat = pos.coords.latitude;
+  userLon = pos.coords.longitude;
+  hidePermDenied();
+  setGPSStatus('ok');
+  reverseGeocode(userLat, userLon);
+  loadNearbyPlaces();
+}
+
+function onPositionError(err) {
+  console.warn('GPS error:', err.code, err.message);
+
+  // GeolocationPositionError 코드별 처리
+  switch (err.code) {
+    case 1: // PERMISSION_DENIED
+      showPermDenied('denied');
+      break;
+    case 2: // POSITION_UNAVAILABLE
+      if (locationRetryCount < MAX_RETRY) {
+        // 자동 재시도 한 번 더
+        setTimeout(() => retryLocation(), 3000);
+        document.getElementById('addr-main').textContent = 'GPS 신호 재탐색 중...';
+        setGPSStatus('searching');
+      } else {
+        showPermDenied('timeout');
+        loadDemoPois();
+      }
+      break;
+    case 3: // TIMEOUT
+      if (locationRetryCount < MAX_RETRY) {
+        setTimeout(() => retryLocation(), 2000);
+        document.getElementById('addr-main').textContent = 'GPS 신호를 기다리는 중...';
+        setGPSStatus('searching');
+      } else {
+        showPermDenied('timeout');
+        loadDemoPois();
+      }
+      break;
+    default:
+      showPermDenied('알 수 없는 오류');
+      loadDemoPois();
+  }
+}
+
+function setGPSStatus(state) {
+  const dot = document.getElementById('gps-dot');
+  const label = document.getElementById('gps-label');
+  const map = {
+    searching: ['dot-amber', 'var(--amber)', '위치 파악 중...'],
+    ok:        ['dot-green', 'var(--green)', 'GPS 연결됨'],
+    error:     ['dot-red',   'var(--red)',   '위치 오류'],
+    demo:      ['dot-amber', 'var(--amber)', '데모 모드'],
+  };
+  const [cls, col, txt] = map[state] || map.error;
+  dot.className = 'dot ' + cls;
+  label.style.color = col;
+  label.textContent = txt;
+}
+
+/* ────────────────────────────────────
+   역지오코딩 (Nominatim)
+──────────────────────────────────── */
+async function reverseGeocode(lat, lon) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=ko`;
+    const res = await fetch(url, { headers: { 'Accept-Language': 'ko' } });
+    const data = await res.json();
+    const a = data.address || {};
+    const road = a.road || a.pedestrian || a.residential || '';
+    const district = a.suburb || a.neighbourhood || a.district || a.county || '';
+    const city = a.city || a.town || a.village || '';
+    const main = road ? road + (a.house_number ? ' ' + a.house_number : '') : district || city;
+    const sub = [district, city].filter(Boolean).join(' ');
+    lastAddr = main;
+    document.getElementById('addr-main').textContent = main || '주소를 확인 중입니다';
+    document.getElementById('addr-sub').textContent = sub;
+  } catch(e) {
+    document.getElementById('addr-main').textContent = `위도 ${userLat.toFixed(4)}°, 경도 ${userLon.toFixed(4)}°`;
+    document.getElementById('addr-sub').textContent = '주소 변환 실패 — 좌표로 표시';
+  }
+}
+
+/* ────────────────────────────────────
+   주변 장소 (Overpass API)
+──────────────────────────────────── */
+async function loadNearbyPlaces() {
+  const r = 300;
+  const query = `
+    [out:json][timeout:15];
+    (
+      node["amenity"~"restaurant|cafe|fast_food|convenience|pharmacy|bank|hospital"](around:${r},${userLat},${userLon});
+      node["shop"~"convenience|supermarket"](around:${r},${userLat},${userLon});
+      node["tourism"~"attraction|museum|hotel"](around:${r},${userLat},${userLon});
+      node["highway"="crossing"](around:${r},${userLat},${userLon});
+      node["highway"="traffic_signals"](around:${r},${userLat},${userLon});
+    );
+    out body;
+  `;
+  try {
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST', body: 'data=' + encodeURIComponent(query)
+    });
+    const data = await res.json();
+    const items = data.elements || [];
+    pois = items.map(el => {
+      const t = el.tags || {};
+      const dist = haversine(userLat, userLon, el.lat, el.lon);
+      const bearing = getBearing(userLat, userLon, el.lat, el.lon);
+      const cat = getCat(t);
+      const name = t.name || t['name:ko'] || getCatLabel(t);
+      return { lat: el.lat, lon: el.lon, dist: Math.round(dist), bearing, cat, name, tags: t };
+    }).filter(p => p.name && p.dist <= r && p.dist > 0)
+      .sort((a, b) => a.dist - b.dist);
+    renderPoi();
+  } catch(e) {
+    console.error('Overpass 실패:', e);
+    loadDemoPois();
+  }
+}
+
+function getCat(t) {
+  if (t.highway === 'crossing' || t.highway === 'traffic_signals') return 'cross';
+  if (t.amenity === 'restaurant' || t.amenity === 'fast_food' || t.amenity === 'cafe') return 'food';
+  if (t.tourism) return 'landmark';
+  return 'other';
+}
+
+function getCatLabel(t) {
+  const m = {
+    restaurant:'음식점', fast_food:'패스트푸드', cafe:'카페',
+    convenience:'편의점', supermarket:'마트', pharmacy:'약국',
+    bank:'은행', hospital:'병원', crossing:'횡단보도',
+    traffic_signals:'신호등', attraction:'명소', museum:'박물관', hotel:'호텔'
+  };
+  return m[t.amenity] || m[t.shop] || m[t.tourism] || m[t.highway] || '장소';
+}
+
+function getIcon(p) {
+  const m = {
+    restaurant:'🍽', fast_food:'🍔', cafe:'☕', convenience:'🏪',
+    supermarket:'🛒', pharmacy:'💊', bank:'🏦', hospital:'🏥',
+    crossing:'🚦', traffic_signals:'🚦', attraction:'⭐', museum:'🏛',
+    hotel:'🏨'
+  };
+  const t = p.tags;
+  return m[t.amenity] || m[t.shop] || m[t.tourism] || m[t.highway]
+    || (p.cat === 'cross' ? '🚦' : p.cat === 'food' ? '🍽' : '📍');
+}
+
+function getIconBg(p) {
+  if (p.cat === 'cross') return '#052e16';
+  if (p.cat === 'food') return '#1c1008';
+  if (p.cat === 'landmark') return '#1e1b4b';
+  return '#0f172a';
+}
+
+/* ────────────────────────────────────
+   데모 POI
+──────────────────────────────────── */
+function loadDemoPois() {
+  pois = [
+    { name:'스타벅스 강남점', cat:'food', dist:80, bearing:60, tags:{amenity:'cafe'} },
+    { name:'맥도날드 강남점', cat:'food', dist:120, bearing:135, tags:{amenity:'fast_food'} },
+    { name:'GS25 편의점', cat:'food', dist:200, bearing:270, tags:{amenity:'convenience'} },
+    { name:'한식당 강남집', cat:'food', dist:150, bearing:220, tags:{amenity:'restaurant'} },
+    { name:'강남역', cat:'landmark', dist:250, bearing:10, tags:{tourism:'attraction'} },
+    { name:'횡단보도', cat:'cross', dist:45, bearing:350, tags:{highway:'crossing'} },
+    { name:'횡단보도 (동쪽)', cat:'cross', dist:90, bearing:85, tags:{highway:'crossing'} },
+  ];
+  renderPoi();
+}
+
+function updateDemoAddress() {
+  document.getElementById('addr-main').textContent = '테헤란로 152';
+  document.getElementById('addr-sub').textContent = '강남역 4번 출구 방면';
+  lastAddr = '테헤란로 152';
+}
+
+/* ────────────────────────────────────
+   POI 렌더링
+──────────────────────────────────── */
+function filterPoi(cat, btn) {
+  currentFilter = cat;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderPoi();
+}
+
+function renderPoi() {
+  const list = document.getElementById('poi-wrap');
+  let filtered = currentFilter === 'all' ? pois : pois.filter(p => p.cat === currentFilter);
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty-state">이 카테고리에 주변 장소가 없습니다</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(p => {
+    const clock = bearingToClockStr(p.bearing);
+    const distCol = p.dist <= 100 ? '#86efac' : p.dist <= 200 ? '#fde68a' : '#94a3b8';
+    const isCross = p.cat === 'cross';
+    return `<div class="poi-item${isCross ? ' cross-item' : ''}" onclick="speakPoi(this,'${esc(p.name)}',${p.bearing},${p.dist},'${p.cat}')">
+      <div class="poi-icon" style="background:${getIconBg(p)}">${getIcon(p)}</div>
+      <div class="poi-info">
+        <div class="poi-name">${p.name}</div>
+        <div class="poi-detail">${clock} · ${p.dist}m</div>
+      </div>
+      <div class="poi-dist" style="color:${distCol}">${p.dist}m</div>
+    </div>`;
+  }).join('');
+}
+
+/* ────────────────────────────────────
+   TTS 발화
+──────────────────────────────────── */
+function speakPoi(el, name, bearing, dist, cat) {
+  document.querySelectorAll('.poi-item').forEach(e => e.classList.remove('speaking'));
+  el.classList.add('speaking');
+  const clock = bearingToClockStr(bearing);
+  let text;
+  if (cat === 'cross') {
+    text = `${clock} ${dist}미터 앞에 횡단보도가 있습니다. 신호를 확인해 주세요.`;
+  } else {
+    text = `${clock} ${dist}미터 거리에 ${name}이 있습니다.`;
+  }
+  speak(text, text.length * 85);
+}
+
+function speakAddress() {
+  const main = document.getElementById('addr-main').textContent;
+  const sub = document.getElementById('addr-sub').textContent;
+  if (!main || main.includes('불러오는')) { speak('아직 위치를 파악 중입니다.', 2000); return; }
+  document.getElementById('addr-card').style.borderColor = 'var(--purple)';
+  setTimeout(() => document.getElementById('addr-card').style.borderColor = 'var(--border)', 2000);
+  const txt = sub ? `현재 위치는 ${main}, ${sub}입니다.` : `현재 위치는 ${main}입니다.`;
+  speak(txt, txt.length * 80);
+}
+
+function speakAllPoi() {
+  const nearby = pois.filter(p => p.cat !== 'cross').slice(0, 3);
+  if (!nearby.length) { speak('주변에 안내할 장소가 없습니다.', 2000); return; }
+  const txts = nearby.map(p => `${bearingToClockStr(p.bearing)} ${p.dist}미터에 ${p.name}`);
+  speak('주변 장소를 안내합니다. ' + txts.join('. ') + '.', 6000);
+}
+
+function speakNearestCross() {
+  const crosses = pois.filter(p => p.cat === 'cross').sort((a, b) => a.dist - b.dist);
+  if (!crosses.length) { speak('근처에 횡단보도가 없습니다.', 2000); return; }
+  const p = crosses[0];
+  speak(`가장 가까운 횡단보도는 ${bearingToClockStr(p.bearing)} ${p.dist}미터 앞입니다. 신호를 확인하고 건너주세요.`, 4500);
+}
+
+/* ────────────────────────────────────
+   나침반
+──────────────────────────────────── */
+function requestCompass() {
+  // iOS 13+ requires explicit permission request for DeviceOrientationEvent
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission()
+      .then(state => {
+        if (state === 'granted') {
+          window.addEventListener('deviceorientation', onOrientation, true);
+        } else {
+          simulateCompass();
+        }
+      })
+      .catch(() => simulateCompass());
+  } else if (typeof DeviceOrientationEvent !== 'undefined') {
+    // Android / non-iOS: attach directly
+    window.addEventListener('deviceorientation', onOrientation, true);
+    // fallback: if no event fires within 3s, simulate
+    const compassTimer = setTimeout(() => simulateCompass(), 3000);
+    window.addEventListener('deviceorientation', () => clearTimeout(compassTimer), { once: true });
+  } else {
+    simulateCompass();
+  }
+}
+
+function onOrientation(e) {
+  let heading = null;
+  if (e.webkitCompassHeading != null) {
+    heading = e.webkitCompassHeading;           // iOS Safari
+  } else if (e.alpha != null) {
+    heading = (360 - e.alpha + 360) % 360;      // Android Chrome
+  }
+  if (heading == null) return;
+  userHeading = heading;
+  document.getElementById('needle').style.transform = `rotate(${-heading}deg)`;
+  const dirs = ['북','북동','동','남동','남','남서','서','북서'];
+  const di = Math.round(((heading % 360) + 360) % 360 / 45) % 8;
+  document.getElementById('heading-text').textContent = dirs[di] + '쪽 (' + Math.round(heading) + '°)';
+  renderPoi();
+}
+
+function simulateCompass() {
+  let a = 0;
+  setInterval(() => {
+    a = (a + 0.5) % 360;
+    userHeading = a;
+    document.getElementById('needle').style.transform = `rotate(${-a}deg)`;
+    const dirs = ['북','북동','동','남동','남','남서','서','북서'];
+    const di = Math.round(a / 45) % 8;
+    document.getElementById('heading-text').textContent = dirs[di] + '쪽 (' + Math.round(a) + '°) [시뮬레이션]';
+    renderPoi();
+  }, 50);
+}
+
+/* ────────────────────────────────────
+   수학 유틸
+──────────────────────────────────── */
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function getBearing(lat1, lon1, lat2, lon2) {
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
+  const x = Math.cos(lat1*Math.PI/180)*Math.sin(lat2*Math.PI/180)
+            - Math.sin(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.cos(dLon);
+  return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+}
+
+function bearingToClockStr(bearing) {
+  const rel = ((bearing - userHeading) + 360) % 360;
+  if (rel < 20 || rel >= 340) return '정면';
+  const h = Math.round(rel / 30) % 12 || 12;
+  return h + '시 방향';
+}
+
+function esc(s) { return s.replace(/'/g,"&#39;"); }
+
+/* 음성 목록 미리 로드 */
+if ('speechSynthesis' in window) {
+  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+}
+</script>
+</body>
+</html>
